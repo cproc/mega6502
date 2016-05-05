@@ -1,0 +1,75 @@
+#!/usr/bin/expect
+
+stty raw -echo
+log_user 0
+
+spawn {*}$argv
+
+set xon_received 1
+
+while 1 {
+
+	if { $xon_received == 1 } {
+
+		set timeout -1
+
+		expect {
+
+			-i $spawn_id -- "?" {
+
+				send -i $user_spawn_id -raw -- $expect_out(buffer)
+
+			}
+
+			# ctrl-r: reset (send ctrl-a-p to picocom)
+
+			-i $user_spawn_id -- "\x12" {
+
+				send -i $spawn_id -raw -- "\x01\x10"
+
+			}
+
+			# ctrl-x: quit (send ctrl-a-x to picocom)
+
+			-i $user_spawn_id -- "\x18" {
+
+				send -i $spawn_id -raw -- "\x01\x18"
+
+			}
+
+			-i $user_spawn_id -- "?" {
+
+				send -i $spawn_id -raw -- $expect_out(buffer)
+				set xon_received 0
+
+			}
+
+			-i $spawn_id eof { exit }
+		}
+
+	} else {
+
+		# not handling user input until XON was received
+
+		set timeout -1
+
+		expect {
+
+			-i $spawn_id -- "\x11" {
+
+				set xon_received 1
+
+			}
+
+			-i $spawn_id -- "?" {
+
+				send -i $user_spawn_id -raw -- $expect_out(buffer)
+
+			}
+
+			-i $spawn_id eof { exit }
+		}
+
+	}
+
+}
